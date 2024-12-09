@@ -1,0 +1,329 @@
+{
+  // Configuration Required:
+  // 1. Replace YOUR_SUBSCRIPTION_ID with your Azure subscription ID
+  // 2. Replace YOUR_RESOURCE_GROUP with your resource group name
+  // 3. Replace YOUR_WORKSPACE_NAME with your Log Analytics workspace name
+  // Note: The default time duration is set to 24h - modify the "ago(24h)" in queries if you want to change the time window
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# AVD Connection Health Monitoring (Last 24 Hours)\n## Overview\nThis workbook monitors Azure Virtual Desktop connection health, focusing on connection failures and host performance. Data shown is for the last 24 hours of activity.\n\n### Key Metrics Tracked:\n- Connection failures and authentication issues\n- Host health and availability issues\n- Connection success trends\n- Host performance indicators\n\n### 🔔 Alert-Ready Metrics:\n- Host failure rates above 50% (excluding authentication failures)\n- Hosts with health scores below 70%\n- Repeated connection failures within 1 hour"
+      },
+      "name": "overview"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## 🔍 Connection Status Detail\nShows all connection attempts and their outcomes across session hosts. Authentication issues are highlighted separately from host health issues.\n\n**Alert Considerations:**\n- Multiple host health issues within an hour\n- Consecutive failures on the same host\n- High failure counts for specific error types"
+      },
+      "name": "connection-failures-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WVDConnections\n| where TimeGenerated > ago(24h)\n| where State != \"Completed\" and State != \"InProgress\"\n| where isnotempty(SessionHostName) and SessionHostName != \"<>\"\n| extend IssueCategory = case(\n    State == \"Connected\", strcat(\"✅ Connected: \", State),\n    State == \"Started\", strcat(\"📡 In Progress: \", State),\n    State contains \"Rejected\" and ClientType contains \"RDP\", strcat(\"⚠️ Authentication Failed: \", State),\n    State contains \"Rejected by client\", strcat(\"👤 User Cancelled: \", State),\n    State contains \"Rejected by server\", strcat(\"🔒 Server Rejected: \", State),\n    State contains \"NotFound\", strcat(\"❌ Host Not Found: \", State),\n    State contains \"ConnectionTimeout\", strcat(\"⏱️ Host Timeout: \", State),\n    State contains \"Failed\", strcat(\"🏥 Connection Failed: \", State),\n    strcat(\"⚡ Other State: \", State))\n| extend StatusType = case(\n    IssueCategory startswith \"✅\", \"SUCCESS\",\n    IssueCategory startswith \"📡\", \"IN_PROGRESS\",\n    IssueCategory startswith \"👤\", \"USER_ACTION\",\n    IssueCategory startswith \"⚠️\" or IssueCategory startswith \"🔒\", \"AUTH_ISSUE\",\n    IssueCategory startswith \"❌\" or IssueCategory startswith \"⏱️\" or IssueCategory startswith \"🏥\", \"HOST_ISSUE\",\n    \"OTHER\")\n| extend ClientType = ClientType\n| extend UserName = UserName\n| summarize AttemptCount = count(), \n            AffectedUsers = make_set(UserName, 5),\n            LastSeen = max(TimeGenerated),\n            FirstSeen = min(TimeGenerated)\n            by SessionHostName, \n               IssueCategory,\n               StatusType,\n               ClientType\n| extend Duration = LastSeen - FirstSeen\n| project \n    SessionHostName, \n    IssueCategory,\n    StatusType,\n    ClientType,\n    AttemptCount,\n    AffectedUsers,\n    FirstSeen,\n    LastSeen,\n    Duration\n| sort by StatusType asc, AttemptCount desc, LastSeen desc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+        ],
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "AttemptCount",
+              "formatter": 3,
+              "formatOptions": {
+                "min": 0,
+                "max": null,
+                "palette": "custom",
+                "customColumnWidthSetting": "100px",
+                "customColorRules": [
+                  {
+                    "operation": "Equal",
+                    "valueParam": "SUCCESS",
+                    "linkTarget": "CellDetails",
+                    "color": "#4BB543"
+                  },
+                  {
+                    "operation": "Equal",
+                    "valueParam": "IN_PROGRESS",
+                    "linkTarget": "CellDetails",
+                    "color": "#0078D4"
+                  },
+                  {
+                    "operation": "Equal",
+                    "valueParam": "USER_ACTION",
+                    "linkTarget": "CellDetails",
+                    "color": "#FFA500"
+                  },
+                  {
+                    "operation": "Equal",
+                    "valueParam": "AUTH_ISSUE",
+                    "linkTarget": "CellDetails",
+                    "color": "#FF8C00"
+                  },
+                  {
+                    "operation": "Default",
+                    "linkTarget": "CellDetails",
+                    "color": "#E81123"
+                  }
+                ]
+              }
+            },
+            {
+              "columnMatch": "Duration",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "orange"
+              }
+            }
+          ],
+          "filter": true,
+          "labelSettings": [
+            {
+              "columnId": "SessionHostName",
+              "label": "Host Name"
+            },
+            {
+              "columnId": "IssueCategory",
+              "label": "Connection Status"
+            },
+            {
+              "columnId": "StatusType",
+              "label": "Type"
+            },
+            {
+              "columnId": "ClientType",
+              "label": "Client Type"
+            },
+            {
+              "columnId": "AttemptCount",
+              "label": "Count"
+            },
+            {
+              "columnId": "AffectedUsers",
+              "label": "Users"
+            },
+            {
+              "columnId": "FirstSeen",
+              "label": "First Seen"
+            },
+            {
+              "columnId": "LastSeen",
+              "label": "Last Seen"
+            },
+            {
+              "columnId": "Duration",
+              "label": "Duration"
+            }
+          ]
+        }
+      },
+      "name": "connection-status-detail"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## 📊 Host Health Analysis\nDisplays failure rates for each session host, focusing on host health issues (excluding authentication failures). Use this to identify problematic hosts that may need investigation or maintenance.\n\n**Alert Considerations:**\n- Health-related failure rates > 50%\n- Sudden increases in failure rate\n- Hosts with both high total attempts and high failure rates"
+      },
+      "name": "host-failure-rates-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WVDConnections\n| where TimeGenerated > ago(24h)\n| where isnotempty(SessionHostName) and SessionHostName != \"<>\"\n| extend IssueCategory = case(\n    State contains \"Rejected\" and ClientType contains \"RDP\", \"AUTH_FAILURE\",\n    State contains \"NotFound\", \"HOST_ERROR\",\n    State contains \"ConnectionTimeout\", \"HOST_ERROR\",\n    State contains \"Failed\", \"HOST_ERROR\",\n    State == \"Connected\", \"SUCCESS\",\n    State == \"Started\", \"SUCCESS\",\n    \"OTHER\")\n| where IssueCategory != \"AUTH_FAILURE\"\n| summarize TotalAttempts = count(),\n          FailedAttempts = countif(IssueCategory == \"HOST_ERROR\") by SessionHostName\n| where TotalAttempts > 0\n| extend FailureRate = round((todouble(FailedAttempts) / todouble(TotalAttempts)) * 100, 2)\n| extend AlertStatus = case(\n    FailureRate >= 75, \"🔴 Critical\",\n    FailureRate >= 50, \"🟡 Warning\",\n    \"🟢 Healthy\")\n| project SessionHostName, TotalAttempts, FailedAttempts, FailureRate, AlertStatus\n| order by FailureRate desc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+        ],
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "FailureRate",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "redGreen",
+                "customColumnWidthSetting": "20ch"
+              }
+            },
+            {
+              "columnMatch": "TotalAttempts",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue",
+                "customColumnWidthSetting": "15ch"
+              }
+            },
+            {
+              "columnMatch": "FailedAttempts",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "red",
+                "customColumnWidthSetting": "15ch"
+              }
+            }
+          ],
+          "filter": true,
+          "labelSettings": [
+            {
+              "columnId": "SessionHostName",
+              "label": "Host Name"
+            },
+            {
+              "columnId": "TotalAttempts",
+              "label": "Total Attempts"
+            },
+            {
+              "columnId": "FailedAttempts",
+              "label": "Failed Attempts"
+            },
+            {
+              "columnId": "FailureRate",
+              "label": "Failure Rate (%)"
+            },
+            {
+              "columnId": "AlertStatus",
+              "label": "Status"
+            }
+          ]
+        }
+      },
+      "name": "host-failure-rates"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## 📈 Successful Connection Trend\nShows the pattern of successful connections over time. Use this to understand usage patterns and identify unusual drops in successful connections.\n\n**Alert Considerations:**\n- Sudden drops in successful connections\n- Extended periods with no successful connections\n- Unusual spikes or dips compared to historical patterns"
+      },
+      "name": "connection-trend-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WVDConnections\n| where TimeGenerated > ago(24h)\n| where isnotempty(SessionHostName) and SessionHostName != \"<>\"\n| where State == \"Connected\"\n| summarize ConnectionCount = count() by bin(TimeGenerated, 1h)\n| render timechart",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+        ],
+        "visualization": "timechart",
+        "chartSettings": {
+          "seriesLabelSettings": [
+            {
+              "seriesName": "ConnectionCount",
+              "label": "Successful Connections",
+              "color": "green"
+            }
+          ],
+          "ySettings": {
+            "numberFormatSettings": {
+              "unit": 0,
+              "options": {
+                "style": "decimal",
+                "useGrouping": true
+              }
+            }
+          }
+        }
+      },
+      "name": "connection-trend"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## 🏥 Host Health Status\nProvides a comprehensive health score for each session host based on connection success rates and recent failures, excluding authentication-related issues.\n\n**Score Interpretation:**\n- 90-100: Excellent health\n- 70-89: Good health\n- 50-69: Needs attention\n- Below 50: Critical issues\n\n**Alert Considerations:**\n- Health scores below 70%\n- Recent failures within the last hour\n- High failed session counts (excluding auth failures)"
+      },
+      "name": "host-health-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WVDConnections\n| where TimeGenerated > ago(24h)\n| where isnotempty(SessionHostName) and SessionHostName != \"<>\"\n| extend IssueCategory = case(\n    State contains \"Rejected\" and ClientType contains \"RDP\", \"AUTH_FAILURE\",\n    State contains \"NotFound\", \"HOST_ERROR\",\n    State contains \"ConnectionTimeout\", \"HOST_ERROR\",\n    State contains \"Failed\", \"HOST_ERROR\",\n    State == \"Connected\", \"SUCCESS\",\n    State == \"Started\", \"SUCCESS\",\n    \"OTHER\")\n| where IssueCategory != \"AUTH_FAILURE\"\n| summarize TotalSessions = count(),\n          FailedSessions = countif(IssueCategory == \"HOST_ERROR\"),\n          LastFailure = maxif(TimeGenerated, IssueCategory == \"HOST_ERROR\")\n          by SessionHostName\n| where TotalSessions > 0\n| extend HealthScore = round(100 - ((toreal(FailedSessions) / toreal(TotalSessions)) * 100), 2)\n| extend HealthStatus = case(\n    HealthScore >= 90, \"🟢 Excellent\",\n    HealthScore >= 70, \"🟡 Good\",\n    HealthScore >= 50, \"🟠 Warning\",\n    \"🔴 Critical\")\n| project-reorder SessionHostName, HealthScore, HealthStatus, TotalSessions, FailedSessions, LastFailure\n| order by HealthScore desc, FailedSessions asc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+        ],
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "HealthScore",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "greenRed",
+                "customColumnWidthSetting": "15ch"
+              }
+            },
+            {
+              "columnMatch": "TotalSessions",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue",
+                "customColumnWidthSetting": "15ch",
+                "aggregation": "Sum"
+              }
+            },
+            {
+              "columnMatch": "FailedSessions",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "red",
+                "customColumnWidthSetting": "15ch",
+                "aggregation": "Sum"
+              }
+            }
+          ],
+          "filter": true,
+          "labelSettings": [
+            {
+              "columnId": "SessionHostName",
+              "label": "Host Name"
+            },
+            {
+              "columnId": "HealthScore",
+              "label": "Health Score (%)"
+            },
+            {
+              "columnId": "HealthStatus",
+              "label": "Status"
+            },
+            {
+              "columnId": "TotalSessions",
+              "label": "Total Sessions"
+            },
+            {
+              "columnId": "FailedSessions",
+              "label": "Failed Sessions"
+            },
+            {
+              "columnId": "LastFailure",
+              "label": "Last Failure Time"
+            }
+          ]
+        }
+      },
+      "name": "host-health-scores"
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+  ],
+  "styleSettings": {
+    "paddingStyle": "wide"
+  }
+}
