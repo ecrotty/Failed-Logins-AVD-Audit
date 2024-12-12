@@ -1,16 +1,19 @@
 {
-  // Configuration Required:
-  // 1. Replace YOUR_SUBSCRIPTION_ID with your Azure subscription ID
-  // 2. Replace YOUR_RESOURCE_GROUP with your resource group name
-  // 3. Replace YOUR_WORKSPACE_NAME with your Log Analytics workspace name
-  // Note: The default time duration is set to 24h - modify the "ago(24h)" in queries if you want to change the time window
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
   "version": "Notebook/1.0",
+  "metadata": {
+    "configuration_instructions": [
+      "1. Replace YOUR_SUBSCRIPTION_ID with your Azure subscription ID",
+      "2. Replace YOUR_RESOURCE_GROUP with your resource group name",
+      "3. Replace YOUR_WORKSPACE_NAME with your Log Analytics workspace name",
+      "Note: The default time duration is set to 24h - modify the \"ago(24h)\" in queries if you want to change the time window"
+    ]
+  },
   "items": [
     {
       "type": 1,
       "content": {
-        "json": "# AVD Connection Health Monitoring (Last 24 Hours)\n## Overview\nThis workbook monitors Azure Virtual Desktop connection health, focusing on connection failures and host performance. Data shown is for the last 24 hours of activity.\n\n### Key Metrics Tracked:\n- Connection failures and authentication issues\n- Host health and availability issues\n- Connection success trends\n- Host performance indicators\n\n### 🔔 Alert-Ready Metrics:\n- Host failure rates above 50% (excluding authentication failures)\n- Hosts with health scores below 70%\n- Repeated connection failures within 1 hour"
+        "json": "# 🔍 AVD Connection Health Analysis\n\nThis workbook monitors Azure Virtual Desktop (AVD) connection health by analyzing the complete connection lifecycle across three key areas:\n\n## 1. 🏥 User Health Status\n- Monitors user connection success rates\n- Tracks recent failures and connection patterns\n- Provides health scores based on connection reliability\n\n## 2. ⏱️ Connection Timing Analysis\n- Analyzes connection duration patterns\n- Identifies potential hanging sessions\n- Tracks connection state transitions\n\n## 3. 📊 Host Health Analysis\n- Tracks the full connection lifecycle (Started → Connected → Completed)\n- Identifies failed connections (sessions that start but never connect)\n- Calculates success rates based on actual connection attempts\n\n**Connection States:**\n- Started: Initial connection attempt\n- Connected: Successfully established connection\n- Completed: Normal session termination\n- Failed: Started but never reached Connected state\n\n**Note:** All analyses focus on the last 24 hours of connection data, filtering out invalid or incomplete records."
       },
       "name": "overview"
     },
@@ -25,7 +28,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "WVDConnections\n| where TimeGenerated > ago(24h)\n| where State != \"Completed\" and State != \"InProgress\"\n| where isnotempty(SessionHostName) and SessionHostName != \"<>\"\n| extend IssueCategory = case(\n    State == \"Connected\", strcat(\"✅ Connected: \", State),\n    State == \"Started\", strcat(\"📡 In Progress: \", State),\n    State contains \"Rejected\" and ClientType contains \"RDP\", strcat(\"⚠️ Authentication Failed: \", State),\n    State contains \"Rejected by client\", strcat(\"👤 User Cancelled: \", State),\n    State contains \"Rejected by server\", strcat(\"🔒 Server Rejected: \", State),\n    State contains \"NotFound\", strcat(\"❌ Host Not Found: \", State),\n    State contains \"ConnectionTimeout\", strcat(\"⏱️ Host Timeout: \", State),\n    State contains \"Failed\", strcat(\"🏥 Connection Failed: \", State),\n    strcat(\"⚡ Other State: \", State))\n| extend StatusType = case(\n    IssueCategory startswith \"✅\", \"SUCCESS\",\n    IssueCategory startswith \"📡\", \"IN_PROGRESS\",\n    IssueCategory startswith \"👤\", \"USER_ACTION\",\n    IssueCategory startswith \"⚠️\" or IssueCategory startswith \"🔒\", \"AUTH_ISSUE\",\n    IssueCategory startswith \"❌\" or IssueCategory startswith \"⏱️\" or IssueCategory startswith \"🏥\", \"HOST_ISSUE\",\n    \"OTHER\")\n| extend ClientType = ClientType\n| extend UserName = UserName\n| summarize AttemptCount = count(), \n            AffectedUsers = make_set(UserName, 5),\n            LastSeen = max(TimeGenerated),\n            FirstSeen = min(TimeGenerated)\n            by SessionHostName, \n               IssueCategory,\n               StatusType,\n               ClientType\n| extend Duration = LastSeen - FirstSeen\n| project \n    SessionHostName, \n    IssueCategory,\n    StatusType,\n    ClientType,\n    AttemptCount,\n    AffectedUsers,\n    FirstSeen,\n    LastSeen,\n    Duration\n| sort by StatusType asc, AttemptCount desc, LastSeen desc",
+        "query": "WVDConnections\n| where TimeGenerated > ago(24h)\n| where isnotempty(SessionHostName) and SessionHostName != \"<>\"\n| extend IssueCategory = case(\n    State == \"Connected\", strcat(\"✅ Connected: \", State),\n    State == \"Started\", strcat(\"📡 In Progress: \", State),\n    State contains \"Rejected\" and ClientType contains \"RDP\", strcat(\"⚠️ Authentication Failed: \", State),\n    State contains \"Rejected by client\", strcat(\"👤 User Cancelled: \", State),\n    State contains \"Rejected by server\", strcat(\"🔒 Server Rejected: \", State),\n    State contains \"NotFound\", strcat(\"❌ Host Not Found: \", State),\n    State contains \"ConnectionTimeout\", strcat(\"⏱️ Host Timeout: \", State),\n    State contains \"Failed\", strcat(\"🏥 Connection Failed: \", State),\n    strcat(\"⚡ Other State: \", State))\n| extend StatusType = case(\n    IssueCategory startswith \"✅\", \"SUCCESS\",\n    IssueCategory startswith \"📡\", \"IN_PROGRESS\",\n    IssueCategory startswith \"👤\", \"USER_ACTION\",\n    IssueCategory startswith \"⚠️\" or IssueCategory startswith \"🔒\", \"AUTH_ISSUE\",\n    IssueCategory startswith \"❌\" or IssueCategory startswith \"⏱️\" or IssueCategory startswith \"🏥\", \"HOST_ISSUE\",\n    \"OTHER\")\n| extend ClientType = ClientType\n| extend UserName = UserName\n| summarize AttemptCount = count(), \n            AffectedUsers = make_set(UserName, 5),\n            LastSeen = max(TimeGenerated),\n            FirstSeen = min(TimeGenerated)\n            by SessionHostName, \n               IssueCategory,\n               StatusType,\n               ClientType\n| extend Duration = LastSeen - FirstSeen\n| project \n    SessionHostName, \n    IssueCategory,\n    StatusType,\n    ClientType,\n    AttemptCount,\n    AffectedUsers,\n    FirstSeen,\n    LastSeen,\n    Duration\n| sort by StatusType asc, AttemptCount desc, LastSeen desc",
         "size": 0,
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
@@ -130,15 +133,45 @@
     {
       "type": 1,
       "content": {
-        "json": "## 📊 Host Health Analysis\nDisplays failure rates for each session host, focusing on host health issues (excluding authentication failures). Use this to identify problematic hosts that may need investigation or maintenance.\n\n**Alert Considerations:**\n- Health-related failure rates > 50%\n- Sudden increases in failure rate\n- Hosts with both high total attempts and high failure rates"
+        "json": "## 📊 Host Health Analysis\nAnalyzes the complete connection lifecycle for each host to identify connection reliability issues and potential problems.\n\n**Connection Lifecycle:**\n- Started → Connected → Completed (Success)\n- Started → Never Connected (Failure)\n\n**Success Rate Calculation:**\n- Success Rate = (Connected Sessions / Started Sessions) × 100\n- Failed Connections = Started Sessions - Connected Sessions\n\n**Health Status Thresholds:**\n- 🟢 Excellent: ≥90% success rate\n- 🟡 Good: 70-89% success rate\n- 🟠 Needs Attention: 50-69% success rate\n- 🔴 Critical: <50% success rate\n\n**Alert Considerations:**\n- Success rates below 70%\n- High number of failed connections\n- Recent failures within the last hour"
       },
-      "name": "host-failure-rates-header"
+      "name": "host-health-header"
     },
     {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "WVDConnections\n| where TimeGenerated > ago(24h)\n| where isnotempty(SessionHostName) and SessionHostName != \"<>\"\n| extend IssueCategory = case(\n    State contains \"Rejected\" and ClientType contains \"RDP\", \"AUTH_FAILURE\",\n    State contains \"NotFound\", \"HOST_ERROR\",\n    State contains \"ConnectionTimeout\", \"HOST_ERROR\",\n    State contains \"Failed\", \"HOST_ERROR\",\n    State == \"Connected\", \"SUCCESS\",\n    State == \"Started\", \"SUCCESS\",\n    \"OTHER\")\n| where IssueCategory != \"AUTH_FAILURE\"\n| summarize TotalAttempts = count(),\n          FailedAttempts = countif(IssueCategory == \"HOST_ERROR\") by SessionHostName\n| where TotalAttempts > 0\n| extend FailureRate = round((todouble(FailedAttempts) / todouble(TotalAttempts)) * 100, 2)\n| extend AlertStatus = case(\n    FailureRate >= 75, \"🔴 Critical\",\n    FailureRate >= 50, \"🟡 Warning\",\n    \"🟢 Healthy\")\n| project SessionHostName, TotalAttempts, FailedAttempts, FailureRate, AlertStatus\n| order by FailureRate desc",
+        "query": "// Connection State Distribution\nWVDConnections\n| where TimeGenerated > ago(24h)\n| where isnotempty(SessionHostName) and SessionHostName != \"<>\"\n| extend HostName = tostring(split(SessionHostName, '.')[0])\n| summarize StateCount = count() by State, HostName\n| order by HostName asc, StateCount desc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+        ],
+        "visualization": "table"
+      },
+      "name": "connection-state-distribution"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// All Possible Connection States\nWVDConnections\n| where TimeGenerated > ago(24h)\n| where isnotempty(SessionHostName) and SessionHostName != \"<>\"\n| summarize Count=count() by State\n| order by Count desc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+        ],
+        "visualization": "table"
+      },
+      "name": "connection-states-analysis"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// Host Health Analysis\nWVDConnections\n| where TimeGenerated > ago(24h)\n| where isnotempty(SessionHostName) and SessionHostName != \"<>\"\n| extend HostName = tostring(split(SessionHostName, '.')[0])\n| summarize\n    ConnectionAttempts = countif(State == \"Started\"),\n    SuccessfulConnections = countif(State == \"Connected\"),\n    CompletedSessions = countif(State == \"Completed\"),\n    LastHourAttempts = countif(TimeGenerated > ago(1h) and State == \"Started\"),\n    LastHourConnected = countif(TimeGenerated > ago(1h) and State == \"Connected\")\n    by HostName\n| extend \n    FailedConnections = ConnectionAttempts - SuccessfulConnections,  // Sessions that started but never connected\n    RecentFailures = LastHourAttempts - LastHourConnected,  // Recent sessions that started but never connected\n    SuccessRate = round((toreal(SuccessfulConnections) / toreal(ConnectionAttempts)) * 100, 2)\n| extend HealthStatus = iff(SuccessRate >= 90, \"🟢 Excellent\",\n    iff(SuccessRate >= 70, \"🟡 Good\",\n    iff(SuccessRate >= 50, \"🟠 Needs Attention\",\n    \"🔴 Critical\")))\n| project\n    ['Host Name'] = HostName,\n    ['Health Status'] = HealthStatus,\n    ['Success Rate'] = SuccessRate,\n    ['Connection Attempts'] = ConnectionAttempts,\n    ['Successful'] = SuccessfulConnections,\n    ['Completed'] = CompletedSessions,\n    ['Failed'] = FailedConnections,\n    ['Recent Failures'] = RecentFailures\n| order by ['Success Rate'] desc",
         "size": 0,
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
@@ -149,7 +182,7 @@
         "gridSettings": {
           "formatters": [
             {
-              "columnMatch": "FailureRate",
+              "columnMatch": "Success Rate",
               "formatter": 8,
               "formatOptions": {
                 "palette": "redGreen",
@@ -157,7 +190,7 @@
               }
             },
             {
-              "columnMatch": "TotalAttempts",
+              "columnMatch": "ConnectionAttempts",
               "formatter": 4,
               "formatOptions": {
                 "palette": "blue",
@@ -165,7 +198,7 @@
               }
             },
             {
-              "columnMatch": "FailedAttempts",
+              "columnMatch": "FailedConnections",
               "formatter": 4,
               "formatOptions": {
                 "palette": "red",
@@ -176,24 +209,28 @@
           "filter": true,
           "labelSettings": [
             {
-              "columnId": "SessionHostName",
-              "label": "Host Name"
+              "columnId": "HostPool",
+              "label": "Host Pool"
             },
             {
-              "columnId": "TotalAttempts",
-              "label": "Total Attempts"
+              "columnId": "HealthStatus",
+              "label": "Health Status (%)"
             },
             {
-              "columnId": "FailedAttempts",
-              "label": "Failed Attempts"
-            },
-            {
-              "columnId": "FailureRate",
-              "label": "Failure Rate (%)"
-            },
-            {
-              "columnId": "AlertStatus",
+              "columnId": "HealthStatus",
               "label": "Status"
+            },
+            {
+              "columnId": "TotalSessions",
+              "label": "Total Sessions"
+            },
+            {
+              "columnId": "FailedSessions",
+              "label": "Failed Sessions"
+            },
+            {
+              "columnId": "LastFailure",
+              "label": "Last Failure Time"
             }
           ]
         }
@@ -243,15 +280,37 @@
     {
       "type": 1,
       "content": {
-        "json": "## 🏥 Host Health Status\nProvides a comprehensive health score for each session host based on connection success rates and recent failures, excluding authentication-related issues.\n\n**Score Interpretation:**\n- 90-100: Excellent health\n- 70-89: Good health\n- 50-69: Needs attention\n- Below 50: Critical issues\n\n**Alert Considerations:**\n- Health scores below 70%\n- Recent failures within the last hour\n- High failed session counts (excluding auth failures)"
+        "json": "## ⏱️ Connection Timing Analysis\nAnalyzes connection timing patterns and potential hanging sessions. This helps identify slow connections, hanging sessions, and unusual connection patterns.\n\n**Thresholds:**\n- Warning: > 30 seconds\n- Critical: > 60 seconds\n- Severe: > 120 seconds\n\n**Connection States:**\n- Started → InProgress: Initial connection attempt\n- InProgress → Connected: Authentication and session setup\n- Total Connection Time: Full connection lifecycle"
       },
-      "name": "host-health-header"
+      "name": "connection-timing-header"
     },
     {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "WVDConnections\n| where TimeGenerated > ago(24h)\n| where isnotempty(SessionHostName) and SessionHostName != \"<>\"\n| extend IssueCategory = case(\n    State contains \"Rejected\" and ClientType contains \"RDP\", \"AUTH_FAILURE\",\n    State contains \"NotFound\", \"HOST_ERROR\",\n    State contains \"ConnectionTimeout\", \"HOST_ERROR\",\n    State contains \"Failed\", \"HOST_ERROR\",\n    State == \"Connected\", \"SUCCESS\",\n    State == \"Started\", \"SUCCESS\",\n    \"OTHER\")\n| where IssueCategory != \"AUTH_FAILURE\"\n| summarize TotalSessions = count(),\n          FailedSessions = countif(IssueCategory == \"HOST_ERROR\"),\n          LastFailure = maxif(TimeGenerated, IssueCategory == \"HOST_ERROR\")\n          by SessionHostName\n| where TotalSessions > 0\n| extend HealthScore = round(100 - ((toreal(FailedSessions) / toreal(TotalSessions)) * 100), 2)\n| extend HealthStatus = case(\n    HealthScore >= 90, \"🟢 Excellent\",\n    HealthScore >= 70, \"🟡 Good\",\n    HealthScore >= 50, \"🟠 Warning\",\n    \"🔴 Critical\")\n| project-reorder SessionHostName, HealthScore, HealthStatus, TotalSessions, FailedSessions, LastFailure\n| order by HealthScore desc, FailedSessions asc",
+        "query": "// Connection Timing Analysis\nWVDConnections\n| where TimeGenerated > ago(24h)\n| where isnotempty(SessionHostName) and SessionHostName != \"<>\"\n| extend HostName = tostring(split(SessionHostName, '.')[0])\n| serialize\n| extend NextTime = next(TimeGenerated, 1)\n| extend NextState = next(State, 1)\n| extend TimeDiff = coalesce(NextTime - TimeGenerated, timespan(0))\n| where TimeDiff > timespan(0)\n| extend ConnectionStatus = iff(TimeDiff > timespan(120s), \"🔴 Severe\",\n    iff(TimeDiff > timespan(60s), \"🟠 Critical\",\n    iff(TimeDiff > timespan(30s), \"🟡 Warning\",\n    \"🟢 Normal\")))\n| project\n    TimeGenerated,\n    UserName,\n    ['Host Name'] = HostName,\n    ClientType,\n    State,\n    NextState,\n    ['Time Difference'] = TimeDiff,\n    ['Status'] = ConnectionStatus\n| order by TimeGenerated desc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+        ],
+        "visualization": "table"
+      },
+      "name": "connection-timing"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## 👥 User Health Status\nProvides a comprehensive health score for each user based on connection success rates and recent failures, excluding authentication-related issues.\n\n**Score Interpretation:**\n- 90-100: Excellent health\n- 70-89: Good health\n- 50-69: Needs attention\n- Below 50: Critical issues\n\n**Alert Considerations:**\n- Health scores below 70%\n- Recent failures within the last hour\n- High failed session counts (excluding auth failures)"
+      },
+      "name": "user-health-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// User Health Status\nWVDConnections\n| where TimeGenerated > ago(24h)\n| where isnotempty(CorrelationId)\n| summarize\n    TotalAttempts = count(),\n    SuccessfulConnections = countif(State == \"Connected\"),\n    FailedConnections = countif(State contains \"Failed\" or State contains \"Timeout\"),\n    RecentFailures = countif(TimeGenerated > ago(1h) and (State contains \"Failed\" or State contains \"Timeout\"))\n    by UserName\n| extend SuccessRate = round((toreal(SuccessfulConnections) / toreal(TotalAttempts)) * 100, 2)\n| extend HealthStatus = iff(SuccessRate >= 90, \"🟢 Excellent\",\n    iff(SuccessRate >= 70, \"🟡 Good\",\n    iff(SuccessRate >= 50, \"🟠 Needs Attention\",\n    \"🔴 Critical\")))\n| project\n    ['User Name'] = UserName,\n    ['Health Status'] = HealthStatus,\n    ['Success Rate'] = SuccessRate,\n    ['Total Attempts'] = TotalAttempts,\n    ['Successful'] = SuccessfulConnections,\n    ['Failed'] = FailedConnections,\n    ['Recent Failures'] = RecentFailures\n| order by ['Success Rate'] desc",
         "size": 0,
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
@@ -262,68 +321,87 @@
         "gridSettings": {
           "formatters": [
             {
-              "columnMatch": "HealthScore",
+              "columnMatch": "Success Rate",
               "formatter": 8,
               "formatOptions": {
-                "palette": "greenRed",
-                "customColumnWidthSetting": "15ch"
+                "min": 70,
+                "max": 100,
+                "palette": "redGreen"
               }
-            },
-            {
-              "columnMatch": "TotalSessions",
-              "formatter": 4,
-              "formatOptions": {
-                "palette": "blue",
-                "customColumnWidthSetting": "15ch",
-                "aggregation": "Sum"
-              }
-            },
-            {
-              "columnMatch": "FailedSessions",
-              "formatter": 4,
-              "formatOptions": {
-                "palette": "red",
-                "customColumnWidthSetting": "15ch",
-                "aggregation": "Sum"
-              }
-            }
-          ],
-          "filter": true,
-          "labelSettings": [
-            {
-              "columnId": "SessionHostName",
-              "label": "Host Name"
-            },
-            {
-              "columnId": "HealthScore",
-              "label": "Health Score (%)"
-            },
-            {
-              "columnId": "HealthStatus",
-              "label": "Status"
-            },
-            {
-              "columnId": "TotalSessions",
-              "label": "Total Sessions"
-            },
-            {
-              "columnId": "FailedSessions",
-              "label": "Failed Sessions"
-            },
-            {
-              "columnId": "LastFailure",
-              "label": "Last Failure Time"
             }
           ]
         }
       },
-      "name": "host-health-scores"
+      "name": "user-health-status"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## 👥 End-User Experience Analysis\nAnalyzes connection patterns and success rates for each user to identify potential issues affecting user experience.\n\n**Score Interpretation:**\n- 90-100: Excellent experience\n- 70-89: Good experience\n- 50-69: Needs attention\n- Below 50: Critical issues\n\n**Alert Considerations:**\n- Success rates below 70%\n- Recent failures within the last hour\n- High number of failed connections"
+      },
+      "name": "end-user-experience-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// End-User Experience - Connection Status\nWVDConnections\n| where TimeGenerated > ago(24h)\n| where isnotempty(CorrelationId)\n| extend ConnectionStatus = iff(State == \"Connected\", \"🟢 Success\",\n    iff(State contains \"Failed\" or State contains \"Timeout\", \"🔴 Failed\",\n    \"🟡 Other\"))\n| project\n    TimeGenerated,\n    ['User Name'] = UserName,\n    ['Client Type'] = ClientType,\n    ['Connection Status'] = ConnectionStatus,\n    ['State Details'] = State\n| order by TimeGenerated desc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+        ],
+        "visualization": "table"
+      },
+      "name": "user-connection-status"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// End-User Experience - Connection Patterns\nWVDConnections\n| where TimeGenerated > ago(24h)\n| where isnotempty(CorrelationId)\n| summarize\n    ['Connection Count'] = count(),\n    ['Success Count'] = countif(State == \"Connected\"),\n    ['Failure Count'] = countif(State contains \"Failed\" or State contains \"Timeout\")\n    by bin(TimeGenerated, 1h)\n| extend ['Success Rate'] = strcat(round((toreal(['Success Count']) / toreal(['Connection Count'])) * 100, 2), '%')\n| order by TimeGenerated desc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+        ],
+        "visualization": "table"
+      },
+      "name": "user-connection-patterns"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// End-User Experience - Client Analysis\nWVDConnections\n| where TimeGenerated > ago(24h)\n| where isnotempty(CorrelationId)\n| summarize\n    TotalAttempts = count(),\n    SuccessfulConnections = countif(State == \"Connected\"),\n    FailedConnections = countif(State contains \"Failed\" or State contains \"Timeout\")\n    by ClientType\n| extend SuccessRate = round((toreal(SuccessfulConnections) / toreal(TotalAttempts)) * 100, 2)\n| extend ClientHealth = iff(SuccessRate >= 90, \"🟢 Excellent\",\n    iff(SuccessRate >= 70, \"🟡 Good\",\n    iff(SuccessRate >= 50, \"🟠 Needs Attention\",\n    \"🔴 Critical\")))\n| project\n    ['Client Type'] = ClientType,\n    ['Health Status'] = ClientHealth,\n    ['Success Rate'] = strcat(SuccessRate, '%'),\n    ['Total Attempts'] = TotalAttempts,\n    ['Successful'] = SuccessfulConnections,\n    ['Failed'] = FailedConnections\n| order by ['Success Rate'] desc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+        ],
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Success Rate",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 70,
+                "max": 100,
+                "palette": "redGreen"
+              }
+            }
+          ]
+        }
+      },
+      "name": "user-client-analysis"
     }
   ],
   "fallbackResourceIds": [
     "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
   ],
-  "styleSettings": {
-    "paddingStyle": "wide"
-  }
+  "styleSettings": {}
 }

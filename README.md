@@ -1,17 +1,39 @@
 # AVD Connection Health Monitoring Workbook
 
-A comprehensive Azure Workbook for monitoring Azure Virtual Desktop (AVD) connection health, focusing on connection failures and host performance metrics. This workbook provides real-time insights into your AVD environment's health status and helps identify potential issues before they impact users.
+A comprehensive Azure Workbook for monitoring Azure Virtual Desktop (AVD) connection health, analyzing the complete connection lifecycle across user experience, connection timing, and host health. This workbook provides real-time insights into your AVD environment's health status and helps identify potential issues before they impact users.
 
 ## Features
 
-- **Connection Status Monitoring**: Detailed tracking of all connection attempts and their outcomes
-- **Host Health Analysis**: Failure rate analysis and health scoring for each session host
-- **Success Trend Visualization**: Time-based visualization of successful connections
-- **Performance Metrics**: Comprehensive host performance indicators
-- **Alert-Ready Metrics**: Pre-configured thresholds for common issues:
-  - Host failure rates above 50%
-  - Hosts with health scores below 70%
-  - Repeated connection failures within 1 hour
+### 1. 🏥 User Health Status
+- User connection success rates monitoring
+- Recent failures and connection patterns tracking
+- Health scores based on connection reliability
+- User-specific connection analysis
+
+### 2. ⏱️ Connection Timing Analysis
+- Connection duration pattern analysis
+- Identification of potential hanging sessions
+- Connection state transition tracking
+- Performance thresholds:
+  - Warning: > 30 seconds
+  - Critical: > 60 seconds
+  - Severe: > 120 seconds
+
+### 3. 📊 Host Health Analysis
+- Complete connection lifecycle tracking (Started → Connected → Completed)
+- Failed connection identification (sessions that start but never connect)
+- Success rate calculations based on actual connection attempts
+- Health status thresholds:
+  - Excellent: ≥90% success rate
+  - Good: 70-89% success rate
+  - Needs Attention: 50-69% success rate
+  - Critical: <50% success rate
+
+### 4. 👥 End-User Experience Analysis
+- Connection patterns and success rates per user
+- Client type performance analysis
+- User-specific health scoring
+- Recent user activity monitoring
 
 ## Prerequisites
 
@@ -34,17 +56,46 @@ A comprehensive Azure Workbook for monitoring Azure Virtual Desktop (AVD) connec
 
 ## Usage
 
-The workbook is divided into several sections:
+The workbook is divided into several key sections:
 
-1. **Connection Status Detail**: Shows all connection attempts and their outcomes
-2. **Host Health Analysis**: Displays failure rates for each session host
-3. **Successful Connection Trend**: Shows the pattern of successful connections over time
-4. **Host Health Status**: Provides a comprehensive health score for each session host
+1. **Connection Status Detail**
+   - All connection attempts and outcomes
+   - Authentication issue highlighting
+   - Host health issue tracking
+
+2. **Host Health Analysis**
+   - Connection lifecycle analysis
+   - Success rate calculations
+   - Health status monitoring
+
+3. **Connection Timing Analysis**
+   - Duration pattern analysis
+   - Hanging session identification
+   - State transition tracking
+
+4. **User Health Status**
+   - User-specific success rates
+   - Recent failure tracking
+   - Health score calculations
+
+5. **End-User Experience Analysis**
+   - Connection patterns
+   - Client type performance
+   - User success rates
 
 Each section includes:
 - Detailed metrics and visualizations
 - Alert considerations
 - Performance indicators
+- Health status thresholds
+
+## Connection States
+
+The workbook tracks various connection states:
+- Started: Initial connection attempt
+- Connected: Successfully established connection
+- Completed: Normal session termination
+- Failed: Started but never reached Connected state
 
 ## Customization
 
