@@ -1,14 +1,11 @@
 {
+  "//": "IMPORTANT: Replace the following values with your own:",
+  "//": "1. SUBSCRIPTION_ID - Your Azure subscription ID",
+  "//": "2. RESOURCE_GROUP - Your resource group name",
+  "//": "3. WORKSPACE_NAME - Your Log Analytics workspace name",
+  "//": "Example path format: /subscriptions/SUBSCRIPTION_ID/resourceGroups/RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/WORKSPACE_NAME",
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
   "version": "Notebook/1.0",
-  "metadata": {
-    "configuration_instructions": [
-      "1. Replace YOUR_SUBSCRIPTION_ID with your Azure subscription ID",
-      "2. Replace YOUR_RESOURCE_GROUP with your resource group name",
-      "3. Replace YOUR_WORKSPACE_NAME with your Log Analytics workspace name",
-      "Note: The default time duration is set to 24h - modify the \"ago(24h)\" in queries if you want to change the time window"
-    ]
-  },
   "items": [
     {
       "type": 1,
@@ -33,7 +30,7 @@
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "crossComponentResources": [
-          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+          "/subscriptions/SUBSCRIPTION_ID/resourceGroups/RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/WORKSPACE_NAME"
         ],
         "visualization": "table",
         "gridSettings": {
@@ -146,7 +143,7 @@
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "crossComponentResources": [
-          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+          "/subscriptions/SUBSCRIPTION_ID/resourceGroups/RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/WORKSPACE_NAME"
         ],
         "visualization": "table"
       },
@@ -161,7 +158,7 @@
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "crossComponentResources": [
-          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+          "/subscriptions/SUBSCRIPTION_ID/resourceGroups/RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/WORKSPACE_NAME"
         ],
         "visualization": "table"
       },
@@ -176,7 +173,7 @@
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "crossComponentResources": [
-          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+          "/subscriptions/SUBSCRIPTION_ID/resourceGroups/RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/WORKSPACE_NAME"
         ],
         "visualization": "table",
         "gridSettings": {
@@ -253,7 +250,7 @@
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "crossComponentResources": [
-          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+          "/subscriptions/SUBSCRIPTION_ID/resourceGroups/RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/WORKSPACE_NAME"
         ],
         "visualization": "timechart",
         "chartSettings": {
@@ -293,7 +290,7 @@
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "crossComponentResources": [
-          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+          "/subscriptions/SUBSCRIPTION_ID/resourceGroups/RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/WORKSPACE_NAME"
         ],
         "visualization": "table"
       },
@@ -302,7 +299,7 @@
     {
       "type": 1,
       "content": {
-        "json": "## 👥 User Health Status\nProvides a comprehensive health score for each user based on connection success rates and recent failures, excluding authentication-related issues.\n\n**Score Interpretation:**\n- 90-100: Excellent health\n- 70-89: Good health\n- 50-69: Needs attention\n- Below 50: Critical issues\n\n**Alert Considerations:**\n- Health scores below 70%\n- Recent failures within the last hour\n- High failed session counts (excluding auth failures)"
+        "json": "## 👥 User Health Status\nProvides a comprehensive health score for each user based on connection patterns, excluding normal disconnections like sleep mode or user-initiated logoffs.\n\n**Score Interpretation:**\n- 90-100: Excellent health (mostly successful connections)\n- 70-89: Good health (occasional issues)\n- 50-69: Needs attention (frequent issues)\n- Below 50: Critical issues (consistent problems)\n\n**Connection Patterns:**\n- Normal: Started → Connected → Completed within typical session duration\n- Sleep/Idle: Connected → No activity for >30 min → New connection\n- Problem: Started → Never Connected or multiple rapid reconnection attempts\n\n**Alert Considerations:**\n- Multiple failed connection attempts within short periods\n- Frequent disconnections during active work hours\n- Pattern of incomplete sessions not matching sleep/idle behavior"
       },
       "name": "user-health-header"
     },
@@ -310,23 +307,44 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "// User Health Status\nWVDConnections\n| where TimeGenerated > ago(24h)\n| where isnotempty(CorrelationId)\n| summarize\n    TotalAttempts = count(),\n    SuccessfulConnections = countif(State == \"Connected\"),\n    FailedConnections = countif(State contains \"Failed\" or State contains \"Timeout\"),\n    RecentFailures = countif(TimeGenerated > ago(1h) and (State contains \"Failed\" or State contains \"Timeout\"))\n    by UserName\n| extend SuccessRate = round((toreal(SuccessfulConnections) / toreal(TotalAttempts)) * 100, 2)\n| extend HealthStatus = iff(SuccessRate >= 90, \"🟢 Excellent\",\n    iff(SuccessRate >= 70, \"🟡 Good\",\n    iff(SuccessRate >= 50, \"🟠 Needs Attention\",\n    \"🔴 Critical\")))\n| project\n    ['User Name'] = UserName,\n    ['Health Status'] = HealthStatus,\n    ['Success Rate'] = SuccessRate,\n    ['Total Attempts'] = TotalAttempts,\n    ['Successful'] = SuccessfulConnections,\n    ['Failed'] = FailedConnections,\n    ['Recent Failures'] = RecentFailures\n| order by ['Success Rate'] desc",
+        "query": "// User Health Status with Sleep Pattern Detection\nlet TimeWindow = 24h;\nlet IdleThreshold = 30m;\nlet RapidReconnectThreshold = 5m;\n// First, get all connection attempts with timing information\nlet ConnectionAttempts = WVDConnections\n| where TimeGenerated > ago(TimeWindow)\n| where isnotempty(CorrelationId)\n| sort by UserName asc, TimeGenerated asc\n| serialize\n| extend NextTime = next(TimeGenerated)\n| extend TimeTillNext = iif(isnotnull(NextTime), NextTime - TimeGenerated, timespan(null))\n| extend NextState = next(State)\n| extend IsNormalEnd = State == \"Completed\" and TimeTillNext > IdleThreshold\n| extend IsSleepPattern = State == \"Connected\" and TimeTillNext > IdleThreshold\n| extend IsRapidReconnect = State == \"Started\" and NextState == \"Started\" and TimeTillNext < RapidReconnectThreshold;\n// Now summarize by user\nConnectionAttempts\n| summarize\n    TotalAttempts = countif(State == \"Started\"),\n    SuccessfulConnections = countif(State == \"Connected\"),\n    CompletedSessions = countif(State == \"Completed\"),\n    NormalEnds = countif(IsNormalEnd),\n    SleepPatterns = countif(IsSleepPattern),\n    RapidReconnects = countif(IsRapidReconnect),\n    LastConnection = max(TimeGenerated)\n    by UserName\n| extend AdjustedAttempts = max_of(1, TotalAttempts - SleepPatterns) // Ensure we don't divide by zero\n| extend EffectiveFailures = max_of(0, AdjustedAttempts - SuccessfulConnections)\n| extend ConnectionRate = (toreal(SuccessfulConnections) / toreal(AdjustedAttempts)) * 100\n| extend BaseScore = iff(TotalAttempts == 0, 0.0, \n    iff(SuccessfulConnections >= AdjustedAttempts, 100.0, ConnectionRate))\n| extend RapidPenalty = iff(RapidReconnects > 0, -5.0 * toreal(RapidReconnects), 0.0)\n| extend HealthScore = round(max_of(0.0, min_of(100.0, BaseScore + RapidPenalty)), 2) // Cap between 0 and 100\n| project\n    ['User Name'] = UserName,\n    ['Health Status'] = case(\n        HealthScore >= 90, \"🟢 Excellent\",\n        HealthScore >= 70, \"🟡 Good\",\n        HealthScore >= 50, \"🟠 Needs Attention\",\n        \"🔴 Critical\"),\n    ['Health Score'] = HealthScore,\n    ['Total Attempts'] = TotalAttempts,\n    ['Adjusted Attempts'] = AdjustedAttempts,\n    ['Successful'] = SuccessfulConnections,\n    ['Sleep/Idle Reconnects'] = SleepPatterns,\n    ['Rapid Reconnects'] = RapidReconnects,\n    ['Effective Failures'] = EffectiveFailures,\n    ['Last Connection'] = LastConnection\n| order by ['Health Score'] desc",
         "size": 0,
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "crossComponentResources": [
-          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+          "/subscriptions/SUBSCRIPTION_ID/resourceGroups/RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/WORKSPACE_NAME"
         ],
         "visualization": "table",
         "gridSettings": {
           "formatters": [
             {
-              "columnMatch": "Success Rate",
+              "columnMatch": "Health Score",
               "formatter": 8,
               "formatOptions": {
-                "min": 70,
+                "min": 0,
                 "max": 100,
                 "palette": "redGreen"
+              }
+            },
+            {
+              "columnMatch": "Sleep/Idle Reconnects",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            },
+            {
+              "columnMatch": "Rapid Reconnects",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "orange"
+              }
+            },
+            {
+              "columnMatch": "Effective Failures",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "red"
               }
             }
           ]
@@ -350,7 +368,7 @@
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "crossComponentResources": [
-          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+          "/subscriptions/SUBSCRIPTION_ID/resourceGroups/RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/WORKSPACE_NAME"
         ],
         "visualization": "table"
       },
@@ -365,7 +383,7 @@
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "crossComponentResources": [
-          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+          "/subscriptions/SUBSCRIPTION_ID/resourceGroups/RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/WORKSPACE_NAME"
         ],
         "visualization": "table"
       },
@@ -380,7 +398,7 @@
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "crossComponentResources": [
-          "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+          "/subscriptions/SUBSCRIPTION_ID/resourceGroups/RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/WORKSPACE_NAME"
         ],
         "visualization": "table",
         "gridSettings": {
@@ -401,7 +419,7 @@
     }
   ],
   "fallbackResourceIds": [
-    "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME"
+    "/subscriptions/SUBSCRIPTION_ID/resourceGroups/RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/WORKSPACE_NAME"
   ],
   "styleSettings": {}
 }
